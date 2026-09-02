@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rook AI — Settings</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --line:#262d36; --ink:#c9d1d9; --mut:#8b949e; --accent:#4493f8; --good:#3fb950; --warn:#d29922; --bad:#f85149; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:13px/1.5 ui-sans-serif,system-ui,Segoe UI,sans-serif; }
+  #wrap { max-width:700px; margin:0 auto; padding:18px 16px 60px; }
+  header { display:flex; align-items:baseline; gap:8px; border-bottom:1px solid var(--line); padding-bottom:10px; margin-bottom:14px; }
+  header .glyph { font-size:18px; } header .title { font-weight:700; font-size:15px; }
+  header .ver { color:var(--mut); font:11px var(--mono); margin-left:auto; }
+  .sec { background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:13px; margin-bottom:13px; }
+  .sec h2 { margin:0 0 10px; font:700 11px/1 var(--mono); text-transform:uppercase; letter-spacing:.06em; color:var(--mut); }
+  .row { display:flex; align-items:center; gap:9px; margin:8px 0; flex-wrap:wrap; }
+  .lbl { color:var(--mut); min-width:78px; font-size:12px; }
+  .lbl small { display:block; color:var(--mut); opacity:.8; font-size:11px; }
+  input[type=text], input:not([type]), select { background:var(--bg); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:6px 9px; font:13px var(--mono); flex:1; min-width:120px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:7px 13px; font-weight:600; cursor:pointer; font-size:12px; }
+  button.ghost { background:var(--panel); border:1px solid var(--line); color:var(--ink); }
+  button.danger { background:rgba(248,81,73,.15); border:1px solid rgba(248,81,73,.4); color:var(--bad); }
+  button:disabled { opacity:.45; cursor:default; }
+  .sw { position:relative; width:34px; height:19px; flex:0 0 auto; cursor:pointer; }
+  .sw input { display:none; }
+  .sw span { position:absolute; inset:0; background:var(--line); border-radius:19px; transition:.15s; }
+  .sw span::after { content:''; position:absolute; left:2px; top:2px; width:15px; height:15px; border-radius:50%; background:#fff; transition:.15s; }
+  .sw input:checked + span { background:var(--accent); }
+  .sw input:checked + span::after { transform:translateX(15px); }
+  .between { justify-content:space-between; }
+  .pill { display:inline-flex; align-items:center; gap:6px; font:600 11px var(--mono); padding:3px 9px; border-radius:999px; border:1px solid var(--line); }
+  .pill.on { color:var(--good); border-color:rgba(63,185,80,.4); } .pill.off { color:var(--bad); border-color:rgba(248,81,73,.4); }
+  .chk { display:flex; gap:9px; padding:8px 0; border-top:1px solid var(--line); align-items:flex-start; }
+  .chk:first-child { border-top:0; }
+  .chk .dot { width:9px; height:9px; border-radius:50%; margin-top:4px; flex:0 0 auto; background:var(--mut); }
+  .chk.ok .dot { background:var(--good); } .chk.warn .dot { background:var(--warn); } .chk.fail .dot { background:var(--bad); } .chk.skip .dot { background:var(--mut); opacity:.5; }
+  .chk .body { flex:1; min-width:0; } .chk .lab { font-weight:600; font-size:12.5px; }
+  .chk .det { color:var(--mut); font-size:11.5px; word-break:break-word; }
+  .chk .fix { color:var(--warn); font-size:11.5px; margin-top:2px; word-break:break-word; } .chk.fail .fix { color:var(--bad); }
+  .chk .ms { color:var(--mut); font:10px var(--mono); margin-left:8px; flex:0 0 auto; }
+  .summary { font:600 11px var(--mono); margin-bottom:6px; }
+  .kv { font:12px/1.7 var(--mono); } .kv b { color:var(--mut); font-weight:600; display:inline-block; min-width:120px; }
+  .chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:4px; } .chip { font:11px var(--mono); background:var(--bg); border:1px solid var(--line); border-radius:5px; padding:2px 7px; }
+  .log { font:11.5px/1.5 var(--mono); background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:9px; max-height:200px; overflow:auto; white-space:pre-wrap; }
+  .log .err { color:var(--bad); } .log .t { color:var(--mut); }
+  .note { color:var(--mut); font-size:11.5px; margin-top:6px; } .hint { color:var(--mut); font-size:11.5px; margin:2px 0 8px; }
+  .idline { color:var(--mut); font:10.5px var(--mono); margin-top:6px; word-break:break-all; }
+  .pingbox { font:12px var(--mono); margin-top:8px; padding:8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); display:none; }
+  .pingbox.ok { border-color:rgba(63,185,80,.4); } .pingbox.bad { border-color:rgba(248,81,73,.4); } .pingbox .fix { color:var(--warn); display:block; margin-top:5px; }
+  .siterow { display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px dashed var(--line); font-size:12px; }
+  .siterow:first-child { border-top:0; } .siterow .h { font-weight:600; } .siterow .p { color:var(--mut); font:11px var(--mono); flex:1; }
+  .empty { color:var(--mut); font-style:italic; font-size:12px; }
+  details summary { cursor:pointer; color:var(--mut); font:700 11px/1 var(--mono); text-transform:uppercase; letter-spacing:.06em; }
+  details[open] summary { margin-bottom:10px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header><span class="glyph">&#9820;</span><span class="title">Rook — Settings</span><span class="ver" id="ver"></span></header>
+
+  <div class="sec">
+    <h2>Model (the mouth)</h2>
+    <p class="hint">Pick the model the extension uses. "auto" on the web app / local console routes here. Use <b>Test this model</b> to see exactly why a choice fails.</p>
+    <div class="row"><span class="lbl">Provider</span><select id="provider"><option value="ollama">Ollama (local)</option><option value="openai">OpenAI-compatible (LM Studio, etc.)</option><option value="perchance">Perchance (free, no setup)</option></select></div>
+    <div class="row" id="row-endpoint"><span class="lbl">Endpoint</span><input id="endpoint" placeholder="http://127.0.0.1:11434"></div>
+    <div class="row" id="row-model"><span class="lbl">Model</span><select id="model"></select></div>
+    <p class="hint" id="perchance-note" style="display:none">Perchance's free model is borrowed via a background relay tab (perchance.org/rook-ai). No endpoint or local setup — the only capability lost if Perchance is down.</p>
+    <div class="row"><button id="save">Save</button><button class="ghost" id="test">Test this model</button><span id="saved" class="note"></span></div>
+    <div class="pingbox" id="pingbox"></div>
+    <p class="idline" id="extid"></p>
+  </div>
+
+  <div class="sec">
+    <h2>Notifications</h2>
+    <div class="row between"><div class="lbl">Discovery notifications<small>OS toast when a page gains powers</small></div><label class="sw"><input type="checkbox" id="s-notify"><span></span></label></div>
+    <div class="row between"><div class="lbl">Badge pulse<small>flash the toolbar icon on discovery</small></div><label class="sw"><input type="checkbox" id="s-pulse"><span></span></label></div>
+  </div>
+
+  <div class="sec">
+    <h2>Per-site powers</h2>
+    <div id="sites"><div class="empty">Loading…</div></div>
+  </div>
+
+  <div class="sec">
+    <h2>Safety</h2>
+    <div class="kv" id="verify"></div>
+    <div class="row" style="margin-top:8px"><button class="ghost" id="clear-trust">Clear local trust</button><button class="danger" id="clear-block">Clear local blocks</button><span id="verify-msg" class="note"></span></div>
+  </div>
+
+  <div class="sec">
+    <h2>Backup</h2>
+    <p class="hint">Export all durable Rook data (settings, memory, cast, per-site powers, model config) to a JSON file, or restore from one.</p>
+    <div class="row"><button id="export">Export backup</button><button class="ghost" id="import-btn">Import backup…</button><input type="file" id="import-file" accept="application/json,.json" style="display:none"><span id="backup-msg" class="note"></span></div>
+  </div>
+
+  <div class="sec">
+    <h2>Lab</h2>
+    <div class="row between"><div class="lbl">Game Bench<small>Rook's HRM test platform — score the brain on puzzles</small></div><button class="ghost" id="open-bench">Open</button></div>
+  </div>
+
+  <div class="sec">
+    <details id="advanced">
+      <summary>Advanced / Debug</summary>
+      <div class="summary" id="summary">run the tests to check the whole stack</div>
+      <div id="checks"></div>
+      <div class="row" style="margin-top:10px"><button id="run">Re-run tests</button></div>
+      <div class="row" style="margin-top:6px"><span id="reach" class="pill off"><span id="reach-txt">—</span></span><span id="resolved" class="pill off">model —</span></div>
+      <div class="kv" id="kv" style="margin-top:6px"></div>
+      <div class="chips" id="installed"></div>
+      <div class="log" id="log" style="margin-top:10px">…</div>
+      <div class="row" style="margin-top:9px"><button class="ghost" id="copy">Copy full report</button><span id="copied" class="note"></span></div>
+    </details>
+  </div>
+</div>
+<script src="settings.js"></script>
+</body>
+</html>

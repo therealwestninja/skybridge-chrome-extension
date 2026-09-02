@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rook perception capture (offscreen)</title>
+</head>
+<body>
+<!-- No visible UI. The OPT-IN perception capture surface (vision/device/geo). Chrome allows only ONE offscreen
+     document per extension and the always-on brain (offscreen.html) owns that slot, so in the current single-doc
+     architecture perceive-capture.js is loaded from offscreen.html and runs inside that one doc. This standalone
+     page is the reference host for a future split where the capture gets its own offscreen document; it loads the
+     SAME capture module. Nothing captures until the worker sends {type:'rook-perceive-capture-cmd', on:true}. -->
+<script src="perceive-capture.js"></script>
+</body>
+</html>

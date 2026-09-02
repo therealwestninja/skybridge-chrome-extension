@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rook brain (offscreen)</title>
+</head>
+<body>
+<!-- No visible UI. This is the persistent MV3 offscreen document that hosts the single, always-on
+     RookAI brain instance (the only writer to IndexedDB "rook-brain"/"session"). The side-panel
+     console and other surfaces are thin clients that RPC into this brain via the service worker. -->
+<script type="module" src="offscreen.js"></script>
+<!-- OPT-IN perception capture (vision/device/geo) folded into this single offscreen doc (Chrome allows only one).
+     Dormant until the worker sends {type:'rook-perceive-capture-cmd', on:true}; no camera/location prompt before that. -->
+<script src="perceive-capture.js"></script>
+<!-- SERIAL port holder for the `serial` cap: navigator.serial needs a document context (not the MV3 worker),
+     so the live OSSM USB port is opened + read/written here. Dormant until the worker forwards a serial op. -->
+<script src="offscreen-serial.js"></script>
+</body>
+</html>

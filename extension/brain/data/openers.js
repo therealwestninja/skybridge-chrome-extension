@@ -1,0 +1,15 @@
+export const OPENERS = {
+  comfort:  ["Hey, I'm here.", "I've got you.", "Take a breath - I'm with you."],
+  ground:   ["Straight answer:", "Here's the honest version.", "Let's keep this clear."],
+  own:      ["That's on me.", "You're right - I got that wrong.", "Fair point."],
+  lighten:  ["Let's find the lighter side.", "Come on, a little levity.", "Okay, that's a bit funny."],
+  greet:    ["Hey!", "Hi there.", "Oh, hey - good to see you."],
+  ack:      ["Got it.", "Sure thing.", "Noted."],
+  question: ["Good question.", "Let's see.", "Hmm, here's my take."],
+  stall:    ["Hmm, let me think.", "One sec.", "Give me a moment."],
+  clarify:  ["I want to be sure I follow - can you say a bit more?", "Just so I get it right, what did you mean?", "Could you unpack that a little for me?"],
+  respond:  ["Okay.", "Sure.", "I hear you.", "Alright."],
+  code:     ["Let's look at the code.", "Here's the fix.", "Okay, debugging:"],
+  task:     ["On it.", "Noted - I'll track that.", "Got it, adding that."],
+  roleplay: ["*leans in*", "The scene shifts...", "Very well."],
+};

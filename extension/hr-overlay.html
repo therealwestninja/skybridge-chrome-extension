@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rook · Heart-Rate Overlay</title>
+<style>
+  /* OBS-ready: transparent page so the panel composites over your scene.
+     Reuses the extension's BLE Heart-Rate reader (0x180D / 0x2A37). */
+  :root{
+    --panel: rgba(10,14,20,.62);
+    --stroke: rgba(255,255,255,.10);
+    --ink:#eaf2ff; --dim:#8ea0bd;
+    --ekg:#37f5a6;                 /* the monitor trace */
+    --zone:#37f5a6;                /* recoloured per HR zone at runtime */
+    --up:#31d67f; --down:#ff5d6c;  /* candle colours */
+    --mono:"SF Mono","JetBrains Mono","Cascadia Code",ui-monospace,Menlo,Consolas,monospace;
+    --sans:ui-rounded,-apple-system,"Segoe UI",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%; background:transparent; overflow:hidden}
+  body{display:flex; align-items:flex-start; justify-content:flex-start; font-family:var(--sans); -webkit-font-smoothing:antialiased}
+
+  #card{
+    width:460px; padding:16px 18px 14px; border-radius:18px;
+    background:var(--panel); border:1px solid var(--stroke);
+    backdrop-filter:blur(9px); -webkit-backdrop-filter:blur(9px);
+    color:var(--ink); position:relative;
+  }
+
+  /* ── top row: heart + BPM + hrv ── */
+  #top{display:flex; align-items:center; gap:14px}
+  #heart{width:44px; height:44px; flex:none; color:var(--zone); transform-origin:50% 55%; filter:none}
+  #heart svg{width:100%; height:100%; display:block}
+  #heart.beat{animation:thump .16s ease}
+  @keyframes thump{0%{transform:scale(1)}35%{transform:scale(1.28)}100%{transform:scale(1)}}
+  #read{display:flex; align-items:baseline; gap:7px; line-height:1}
+  #bpm{font-family:var(--mono); font-size:58px; font-weight:700; letter-spacing:-1px; color:var(--zone);
+       font-variant-numeric:tabular-nums; min-width:2ch; text-align:right}
+  #unit{font-family:var(--mono); font-size:15px; font-weight:600; color:var(--dim); letter-spacing:2px; padding-bottom:6px}
+  #meta{margin-left:auto; text-align:right; font-family:var(--mono); font-size:11px; color:var(--dim); line-height:1.5}
+  #meta b{color:var(--ink); font-weight:600}
+  #zonelbl{font-family:var(--mono); font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:var(--zone); font-weight:700}
+
+  /* ── EKG sweep ── */
+  #ekgWrap{margin-top:12px; position:relative; height:96px; border-radius:12px; overflow:hidden;
+    background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(0,0,0,.10));
+    border:1px solid var(--stroke)}
+  #ekg{display:block; width:100%; height:100%}
+  #grid{position:absolute; inset:0; pointer-events:none; opacity:.5;
+    background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);
+    background-size:24px 24px}
+
+  /* ── candlesticks ── */
+  #candWrap{margin-top:10px; position:relative; height:78px; border-radius:12px; overflow:hidden;
+    background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(0,0,0,.10)); border:1px solid var(--stroke)}
+  #candles{display:block; width:100%; height:100%}
+  #candlbl{position:absolute; left:9px; top:7px; font-family:var(--mono); font-size:9px; letter-spacing:1.5px;
+    text-transform:uppercase; color:var(--dim)}
+
+  /* ── connect / status (hidden once live; crop it out in OBS, or it just fades) ── */
+  #bar{margin-top:11px; display:flex; align-items:center; gap:10px}
+  #connect{font-family:var(--sans); font-size:13px; font-weight:600; color:#06121a; background:var(--ekg);
+    border:none; border-radius:9px; padding:8px 14px; cursor:pointer}
+  #connect:hover{filter:brightness(1.08)}
+  #status{font-family:var(--mono); font-size:11px; color:var(--dim)}
+  #status.ok{color:var(--up)} #status.err{color:var(--down)} #status.warn{color:#e9c04a}
+  body.live #bar{opacity:0; height:0; margin:0; pointer-events:none; transition:opacity .4s, height .3s .1s, margin .3s .1s; overflow:hidden}
+  #flat{position:absolute; inset:0; display:grid; place-items:center; font-family:var(--mono); font-size:12px;
+    color:var(--dim); letter-spacing:2px; text-transform:uppercase; pointer-events:none; opacity:0; transition:opacity .3s}
+  #ekgWrap.nosig #flat{opacity:.7}
+</style>
+</head>
+<body>
+  <div id="card">
+    <div id="top">
+      <div id="heart"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7.5-4.9-10-9.2C.2 8.4 1.6 4.7 5 4.1c2-.35 3.9.6 5 2.2 1.1-1.6 3-2.55 5-2.2 3.4.6 4.8 4.3 3 7.7C19.5 16.1 12 21 12 21z"/></svg></div>
+      <div id="read"><span id="bpm">--</span><span id="unit">BPM</span></div>
+      <div id="meta"><span id="zonelbl">--</span><br><span>HRV <b id="hrv">--</b></span></div>
+    </div>
+
+    <div id="ekgWrap" class="nosig">
+      <canvas id="ekg"></canvas>
+      <div id="grid"></div>
+      <div id="flat">no signal</div>
+    </div>
+
+    <div id="candWrap">
+      <div id="candlbl">BPM · rolling</div>
+      <canvas id="candles"></canvas>
+    </div>
+
+    <div id="bar">
+      <button id="connect">Connect HR sensor</button>
+      <span id="status">idle — click Connect, or add ?demo to the URL</span>
+    </div>
+  </div>
+
+<script>
+/* ============================================================================
+   Rook Heart-Rate Overlay for OBS.
+   - Reuses the extension's BLE reader: standard Heart Rate Service 0x180D /
+     Heart Rate Measurement 0x2A37 (flags + BPM + RR intervals), rolling RMSSD.
+   - Renders: zone-coloured BPM, a rolling EKG sweep (patient-monitor style),
+     and a rolling candlestick chart of BPM (OHLC per ~2s bucket).
+   - ?demo runs a realistic simulated HR so you can preview with no strap.
+   OBS: Web Bluetooth needs real Chrome, so open this in Chrome, click Connect,
+   then capture it in OBS via Window Capture (crop to the panel). ?demo works
+   as a plain Browser Source too.
+   ============================================================================ */
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+  var HR_SERVICE = 0x180d, HR_MEASUREMENT = 0x2a37;
+
+  // ---- shared state ----
+  var bpm = 0, lastBeatAt = 0, beatIntervalMs = 1000;   // beat cadence drives the EKG
+  var rrBuf = [];
+
+  // ---- HR zones (colour + label) ----
+  var ZONES = [
+    { max:60,  c:"#5aa9ff", n:"resting" },
+    { max:100, c:"#37f5a6", n:"normal"  },
+    { max:140, c:"#e9c04a", n:"elevated"},
+    { max:170, c:"#ff8a3d", n:"high"    },
+    { max:999, c:"#ff5d6c", n:"max"     }
+  ];
+  function zoneFor(v){ for(var i=0;i<ZONES.length;i++){ if(v<ZONES[i].max) return ZONES[i]; } return ZONES[ZONES.length-1]; }
+
+  // ---- 0x2A37 parse (same format the extension reads) ----
+  function parseHr(dv){
+    var flags = dv.getUint8(0), hr16 = (flags&0x01)!==0, i=1, v;
+    if(hr16){ v = dv.getUint16(i,true); i+=2; } else { v = dv.getUint8(i); i+=1; }
+    if(flags&0x08) i+=2;                                  // energy expended — skip
+    var rr=[]; if(flags&0x10){ for(; i+1<dv.byteLength; i+=2) rr.push(Math.round(dv.getUint16(i,true)*1000/1024)); }
+    return { bpm:v, rr:rr };
+  }
+  function rmssd(rr){
+    if(!rr||!rr.length) return null;
+    for(var k=0;k<rr.length;k++){ if(rr[k]>250&&rr[k]<2000) rrBuf.push(rr[k]); }
+    if(rrBuf.length>30) rrBuf=rrBuf.slice(-30);
+    if(rrBuf.length<3) return null;
+    var s=0,n=0; for(var j=1;j<rrBuf.length;j++){ var d=rrBuf[j]-rrBuf[j-1]; s+=d*d; n++; }
+    return n?Math.round(Math.sqrt(s/n)):null;
+  }
+
+  // ---- the one entry point: a new BPM reading ----
+  function onBpm(v, hrv){
+    if(!(v>0)) return;
+    bpm = v; beatIntervalMs = Math.max(250, 60000/v);
+    var z = zoneFor(v);
+    document.documentElement.style.setProperty("--zone", z.c);
+    $("bpm").textContent = v;
+    $("zonelbl").textContent = z.n;
+    if(hrv!=null) $("hrv").textContent = hrv + " ms";
+    $("heart").classList.add("beat"); setTimeout(function(){ $("heart").classList.remove("beat"); }, 160);
+    $("ekgWrap").classList.remove("nosig");
+    pushCandle(v);
+    if(!document.body.classList.contains("live")) document.body.classList.add("live");
+  }
+
+  // =========================== EKG rolling sweep ===========================
+  // A synthetic ECG (P-QRS-T) whose beat cadence follows the live BPM, drawn as
+  // a left-to-right sweep with a small erase gap ahead of the scan line — the
+  // classic patient-monitor look: the new trace replaces the old in place.
+  var ekg = $("ekg"), ectx, EW, EH, sweepSec = 6, xPix = 0, lastT = 0, phase = 0;
+  function sizeEkg(){
+    var r = ekg.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio||1);
+    EW = Math.max(1, Math.floor(r.width*dpr)); EH = Math.max(1, Math.floor(r.height*dpr));
+    ekg.width = EW; ekg.height = EH; ectx = ekg.getContext("2d"); ectx.lineCap="round"; ectx.lineJoin="round";
+    xPix = 0;
+  }
+  // amplitude of the synthetic ECG at a beat-phase p in [0,1); baseline ~0, up = +.
+  function ecg(p){
+    // P wave
+    var y = 0.10*Math.exp(-Math.pow((p-0.13)/0.028,2));
+    // QRS complex: small Q dip, tall R spike, S dip
+    y += -0.10*Math.exp(-Math.pow((p-0.255)/0.010,2));
+    y +=  1.00*Math.exp(-Math.pow((p-0.285)/0.011,2));
+    y += -0.24*Math.exp(-Math.pow((p-0.315)/0.012,2));
+    // T wave
+    y += 0.22*Math.exp(-Math.pow((p-0.52)/0.05,2));
+    return y;
+  }
+  var prevY = null, tSec = 0;
+  function drawEkg(ts){
+    requestAnimationFrame(drawEkg);
+    if(!ectx) return;
+    if(!lastT) lastT = ts;
+    var dt = Math.min(0.05, (ts-lastT)/1000); lastT = ts;
+    if(bpm<=0){ return; }                                  // wait for the first reading
+    tSec += dt;
+    var pxPerSec = EW / sweepSec, beatSec = beatIntervalMs/1000;
+    var nx = xPix + pxPerSec*dt;
+    var mid = EH*0.56, amp = EH*0.40, gap = Math.max(8, EW*0.02);
+    var base = getComputedStyle(document.documentElement).getPropertyValue("--ekg").trim() || "#37f5a6";
+    ectx.strokeStyle = (bpm>=140) ? zoneFor(bpm).c : base;
+    ectx.lineWidth = Math.max(1.8, EH*0.024);
+    // sample the ECG PER PIXEL along the sweep so the narrow QRS spike isn't aliased away
+    for(var x = Math.ceil(xPix); x <= nx; x++){
+      var timeAtX = tSec - (nx - x)/pxPerSec;              // real time when the pen passes this column
+      var ph = (timeAtX / beatSec) % 1; if(ph < 0) ph += 1;
+      var y = mid - ecg(ph)*amp;
+      if(prevY != null){ ectx.beginPath(); ectx.moveTo(x-1, prevY); ectx.lineTo(x, y); ectx.stroke(); }
+      prevY = y;
+    }
+    ectx.clearRect(Math.ceil(nx), 0, gap, EH);             // erase just ahead of the pen (the scan gap)
+    xPix = nx;
+    if(xPix >= EW){ xPix = 0; prevY = null; }               // wrap: new sweep starts at the left
+  }
+
+  // =========================== candlestick chart ===========================
+  // Each candle = one ~2s bucket of BPM samples: O=first, H=max, L=min, C=last.
+  var candCanvas = $("candles"), cctx, CW, CH, BUCKET_MS = 2000, MAX_CANDLES = 26;
+  var candles = [], cur = null;
+  function sizeCand(){
+    var r = candCanvas.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio||1);
+    CW = Math.max(1, Math.floor(r.width*dpr)); CH = Math.max(1, Math.floor(r.height*dpr));
+    candCanvas.width = CW; candCanvas.height = CH; cctx = candCanvas.getContext("2d");
+  }
+  function pushCandle(v){
+    var now = Date.now();
+    if(!cur || now - cur.t0 >= BUCKET_MS){
+      if(cur) candles.push(cur);
+      if(candles.length > MAX_CANDLES) candles = candles.slice(-MAX_CANDLES);
+      cur = { t0:now, o:v, h:v, l:v, c:v };
+    } else {
+      cur.h = Math.max(cur.h, v); cur.l = Math.min(cur.l, v); cur.c = v;
+    }
+    drawCandles();
+  }
+  function drawCandles(){
+    if(!cctx) return;
+    cctx.clearRect(0,0,CW,CH);
+    var all = candles.concat(cur?[cur]:[]);
+    if(!all.length) return;
+    var lo=Infinity, hi=-Infinity;
+    for(var i=0;i<all.length;i++){ lo=Math.min(lo,all[i].l); hi=Math.max(hi,all[i].h); }
+    if(hi-lo < 6){ var mid=(hi+lo)/2; hi=mid+3; lo=mid-3; }            // avoid a squashed range
+    var padT = CH*0.14, padB = CH*0.12, H = CH-padT-padB;
+    var y = function(v){ return padT + (1-(v-lo)/(hi-lo))*H; };
+    var n = MAX_CANDLES, slot = CW/n, bw = Math.max(3, slot*0.56);
+    var start = n - all.length;                                        // right-align newest
+    for(var k=0;k<all.length;k++){
+      var cd = all[k], cx = (start+k)*slot + slot/2;
+      var up = cd.c >= cd.o;
+      var col = up ? getComputedStyle(document.documentElement).getPropertyValue("--up").trim()
+                   : getComputedStyle(document.documentElement).getPropertyValue("--down").trim();
+      cctx.strokeStyle = col; cctx.fillStyle = col; cctx.lineWidth = Math.max(1, bw*0.14);
+      // wick
+      cctx.beginPath(); cctx.moveTo(cx, y(cd.h)); cctx.lineTo(cx, y(cd.l)); cctx.stroke();
+      // body
+      var yo=y(cd.o), yc=y(cd.c), top=Math.min(yo,yc), bh=Math.max(2, Math.abs(yc-yo));
+      if(up){ cctx.globalAlpha=.85; cctx.fillRect(cx-bw/2, top, bw, bh); cctx.globalAlpha=1; }
+      else  { cctx.fillRect(cx-bw/2, top, bw, bh); }
+    }
+  }
+
+  // =========================== HR sources ===========================
+  function setStatus(t,cls){ var e=$("status"); e.textContent=t; e.className=cls||""; }
+
+  // (1) real sensor over Web Bluetooth — the extension's reader
+  var device=null, characteristic=null, userStopped=false, reconnectTimer=null;
+  function onValue(ev){ try{ var p=parseHr(ev.target.value); onBpm(p.bpm, rmssd(p.rr)); }catch(e){} }
+  async function connectGatt(){
+    setStatus("connecting…","");
+    var server = await device.gatt.connect();
+    var service = await server.getPrimaryService(HR_SERVICE);
+    characteristic = await service.getCharacteristic(HR_MEASUREMENT);
+    await characteristic.startNotifications();
+    characteristic.addEventListener("characteristicvaluechanged", onValue);
+    setStatus("live — " + (device.name||"sensor"), "ok"); $("connect").textContent="Reconnect";
+  }
+  function onDisconnect(){
+    characteristic=null; $("ekgWrap").classList.add("nosig");
+    if(userStopped){ setStatus("stopped",""); return; }
+    setStatus("reconnecting…","warn");
+    if(device && !reconnectTimer) reconnectTimer=setTimeout(function(){ reconnectTimer=null; connectGatt().catch(function(){ setStatus("reconnect failed","err"); }); }, 2500);
+  }
+  async function pick(){
+    if(!navigator.bluetooth){ setStatus("Web Bluetooth not available — open in Chrome, or use ?demo","err"); return; }
+    userStopped=false;
+    try{ device = await navigator.bluetooth.requestDevice({ filters:[{ services:[HR_SERVICE] }], optionalServices:[HR_SERVICE] }); }
+    catch(e){ setStatus(e&&e.name==="NotFoundError"?"no device chosen":"pick failed","warn"); return; }
+    device.addEventListener("gattserverdisconnected", onDisconnect);
+    try{ await connectGatt(); }catch(e){ setStatus("connect failed: "+(e&&e.message||e),"err"); }
+  }
+
+  // (2) demo mode — a realistic wandering HR (?demo or ?demo=72)
+  function startDemo(seed){
+    var target = seed||74, v = target, t = 0;
+    setStatus("demo — simulated heart rate","ok");
+    (function tick(){
+      t += 1;
+      // slow sinus drift + breathing wobble + small noise, occasional excursions
+      target += (Math.random()-0.5)*3; target = Math.max(52, Math.min(past(target), 176));
+      var breath = Math.sin(t/6)*2.2;
+      v += (target - v)*0.15 + breath*0.15 + (Math.random()-0.5)*1.6;
+      v = Math.max(48, Math.min(190, v));
+      // fabricate an RR interval so HRV shows
+      var rr = Math.round(60000/v + (Math.random()-0.5)*40);
+      onBpm(Math.round(v), rmssd([rr]));
+      demoTimer = setTimeout(tick, Math.max(400, 60000/v));   // roughly one reading per beat
+    })();
+    function past(x){ if(Math.random()<0.006) return x+ (Math.random()<0.5? 35 : -20); return x; }
+  }
+  var demoTimer=null;
+
+  // ---- boot ----
+  function boot(){
+    sizeEkg(); sizeCand();
+    requestAnimationFrame(drawEkg);
+    $("connect").addEventListener("click", pick);
+    window.addEventListener("resize", function(){ sizeEkg(); sizeCand(); drawCandles(); });
+    var q = new URLSearchParams(location.search);
+    if(q.has("demo")){ startDemo(parseInt(q.get("demo"),10)||0); }
+    else if(!navigator.bluetooth){ setStatus("no Web Bluetooth here — add ?demo to preview, or open in Chrome","warn"); }
+  }
+  if(document.readyState!=="loading") boot(); else document.addEventListener("DOMContentLoaded", boot);
+})();
+</script>
+</body>
+</html>

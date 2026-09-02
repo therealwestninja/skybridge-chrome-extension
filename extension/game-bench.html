@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rook Brain Bench</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --line:#262d36; --ink:#c9d1d9; --mut:#8b949e; --accent:#4493f8; --good:#3fb950; --warn:#d29922; --bad:#f85149; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:13px/1.5 ui-sans-serif,system-ui,Segoe UI,sans-serif; }
+  #wrap { max-width:900px; margin:0 auto; padding:18px 16px 80px; }
+  header { display:flex; align-items:baseline; gap:8px; border-bottom:1px solid var(--line); padding-bottom:10px; margin-bottom:14px; }
+  header .glyph { font-size:18px; } header .title { font-weight:700; font-size:15px; }
+  header .sub { color:var(--mut); font:11px var(--mono); margin-left:auto; }
+  .sec { background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:13px; margin-bottom:13px; }
+  .sec h2 { margin:0 0 10px; font:700 11px/1 var(--mono); text-transform:uppercase; letter-spacing:.06em; color:var(--mut); }
+  .row { display:flex; align-items:center; gap:9px; margin:8px 0; flex-wrap:wrap; }
+  .lbl { color:var(--mut); min-width:80px; font-size:12px; }
+  input, select { background:var(--bg); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:6px 9px; font:13px var(--mono); }
+  #msg { flex:1; min-width:160px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:8px 15px; font-weight:600; cursor:pointer; font-size:13px; }
+  button.ghost { background:var(--panel); border:1px solid var(--line); color:var(--ink); padding:6px 11px; font-size:12px; }
+  button:disabled { opacity:.45; cursor:default; }
+  .hint { color:var(--mut); font-size:11.5px; margin:2px 0 8px; }
+  .card { border:1px solid var(--line); border-radius:8px; margin:10px 0; overflow:hidden; }
+  .card .head { display:flex; align-items:center; gap:8px; padding:7px 10px; font:600 12px var(--mono); border-bottom:1px solid var(--line); background:rgba(68,147,248,.08); }
+  .card .head .you { color:var(--ink); } .card .head .tag { color:var(--mut); margin-left:auto; font:11px var(--mono); }
+  .card .body { padding:9px 10px; }
+  .kv { display:grid; grid-template-columns:90px 1fr; gap:3px 10px; font:11.5px var(--mono); margin-bottom:8px; }
+  .kv .k { color:var(--mut); } .kv .v { color:var(--ink); }
+  .bars { margin:6px 0; }
+  .bar { display:grid; grid-template-columns:96px 1fr 44px; gap:8px; align-items:center; margin:3px 0; font:11px var(--mono); }
+  .bar .name { color:var(--mut); } .bar .name.win { color:var(--good); font-weight:700; }
+  .track { background:var(--bg); border-radius:4px; height:12px; overflow:hidden; }
+  .fill { height:100%; background:var(--accent); } .fill.win { background:var(--good); }
+  .reply { border-top:1px solid var(--line); padding-top:7px; margin-top:7px; }
+  .reply .src { color:var(--mut); font:11px var(--mono); }
+  table { width:100%; border-collapse:collapse; font:11.5px var(--mono); }
+  th, td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--mut); font-weight:600; } td.ok { color:var(--good); } td.no { color:var(--bad); }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header><span class="glyph">&#9820;</span><span class="title">Rook Brain Bench</span><span class="sub" id="ver">new brain</span></header>
+
+  <div class="sec">
+    <h2>Settings</h2>
+    <div class="row">
+      <span class="lbl">Ticks/turn</span><input id="ticks" type="number" value="30" min="1" max="200" style="flex:0 0 70px">
+      <span class="lbl">Backend</span>
+      <select id="backend"><option value="worker">extension worker (your Settings model)</option><option value="none">local only (Reflex, no LLM)</option></select>
+      <span class="lbl">Noise</span><input id="noise" type="number" value="0" min="0" max="5" step="0.5" style="flex:0 0 60px">
+      <button class="ghost" id="rebuild">Apply / reset brain</button>
+    </div>
+    <p class="hint">Adjusting ticks/backend/noise rebuilds a fresh brain. Use this to see how the tick budget changes which action wins and how decisive (confidence) it is.</p>
+  </div>
+
+  <div class="sec">
+    <h2>Probe</h2>
+    <div class="row"><input id="msg" placeholder="type a message and Send..." autofocus><button id="send">Send</button></div>
+    <p class="hint">Each probe shows the brain's internal decision: intent, the action competition (rate bars), mood + chemistry, the Reflex sample, and the final reply.</p>
+    <div class="row"><span class="lbl">Feedback</span><button class="ghost" id="fbUp">Reward (+)</button><button class="ghost" id="fbDown">Wary (-)</button><span class="hint" id="fbOut" style="margin:0">react to the last reply; watch the chemistry shift</span></div>
+    <div id="cards"></div>
+  </div>
+
+  <div class="sec">
+    <h2>Ablation validation</h2>
+    <p class="hint">Runs the deterministic objective harness in-page (mock backend + embedder; no Ollama needed). Full brain vs ablated.</p>
+    <div class="row"><button id="validate">Run validation</button><span class="hint" id="valstatus" style="margin:0"></span></div>
+    <div id="valout"></div>
+  </div>
+</div>
+
+<script type="module" src="game-bench.js"></script>
+</body>
+</html>

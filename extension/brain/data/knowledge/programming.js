@@ -1,0 +1,31 @@
+// Programming knowledge pack (authored, expandable). ASCII-only.
+export const FACTS = [
+  // concepts
+  { s: "concept", k: ["variable"], a: "A variable is a named container that holds a value your program can read and change." },
+  { s: "concept", k: ["function", "method"], a: "A function is a reusable block of code that takes inputs and returns a result." },
+  { s: "concept", k: ["loop", "iterate", "iteration"], a: "A loop repeats a block of code, often until a condition is met (for, while)." },
+  { s: "concept", k: ["array", "list"], a: "An array (or list) is an ordered collection of values accessed by index." },
+  { s: "concept", k: ["object", "dictionary", "map", "hash"], a: "An object/map stores values under named keys for fast lookup." },
+  { s: "concept", k: ["recursion", "recursive"], a: "Recursion is when a function calls itself, breaking a problem into smaller versions of itself." },
+  { s: "concept", k: ["conditional", "if", "branch"], a: "A conditional (if/else) runs different code depending on whether a test is true." },
+  { s: "concept", k: ["boolean"], a: "A boolean is a value that is either true or false." },
+  { s: "concept", k: ["string"], a: "A string is a sequence of text characters." },
+  { s: "concept", k: ["api"], a: "An API is a defined interface that lets one program request services or data from another." },
+  { s: "concept", k: ["bug", "debug", "debugging"], a: "A bug is a defect in code; debugging is finding and fixing it, often by reproducing and isolating the cause." },
+  { s: "concept", k: ["compile", "compiler"], a: "A compiler translates source code into machine code or bytecode before it runs." },
+  { s: "concept", k: ["syntax"], a: "Syntax is the set of grammar rules a language requires for code to be valid." },
+  { s: "concept", k: ["async", "asynchronous", "promise"], a: "Asynchronous code lets a program start a slow task and continue without waiting, handling the result later." },
+  { s: "concept", k: ["git", "commit", "version control"], a: "Git is a version-control system that tracks changes to code in commits you can review and revert." },
+  { s: "concept", k: ["regex", "regular expression"], a: "A regular expression is a pattern for matching and searching text." },
+  { s: "concept", k: ["json"], a: "JSON is a lightweight text format for data, using objects, arrays, strings, numbers, booleans, and null." },
+  { s: "concept", k: ["algorithm"], a: "An algorithm is a precise, step-by-step procedure for solving a problem." },
+  // languages
+  { s: "language", k: ["python"], a: "Python is a high-level, readable, general-purpose language popular for scripting, data, and AI." },
+  { s: "language", k: ["javascript", "js"], a: "JavaScript is the language of the web, running in browsers and (via Node) on servers." },
+  { s: "language", k: ["html"], a: "HTML is the markup language that structures the content of web pages." },
+  { s: "language", k: ["css"], a: "CSS styles the appearance and layout of web pages." },
+  { s: "language", k: ["sql"], a: "SQL is a query language for reading and writing data in relational databases." },
+  { s: "language", k: ["rust"], a: "Rust is a systems language focused on memory safety without a garbage collector." },
+  { s: "language", k: ["typescript"], a: "TypeScript is JavaScript with optional static types that catch errors before runtime." },
+  { s: "language", k: ["c", "cpp", "c++"], a: "C and C++ are fast, low-level languages giving direct control over memory and hardware." },
+];

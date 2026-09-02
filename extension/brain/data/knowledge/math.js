@@ -1,0 +1,23 @@
+// Math knowledge pack (authored, expandable). ASCII-only.
+export const FACTS = [
+  { s: "constant", k: ["pi", "circumference"], a: "Pi is about 3.14159, relating a circle's circumference to its diameter." },
+  { s: "constant", k: ["euler", "e"], a: "Euler's number e is about 2.71828, the base of the natural logarithm." },
+  { s: "constant", k: ["golden", "phi"], a: "The golden ratio phi is about 1.61803, where a/b equals (a+b)/a." },
+  { s: "definition", k: ["prime"], a: "A prime number is a whole number greater than 1 divisible only by 1 and itself." },
+  { s: "definition", k: ["integer"], a: "An integer is a whole number, positive, negative, or zero, with no fractional part." },
+  { s: "definition", k: ["fraction"], a: "A fraction expresses a part of a whole as a numerator over a denominator." },
+  { s: "definition", k: ["factorial"], a: "A factorial n! is the product of all positive integers up to n; for example 5! = 120." },
+  { s: "definition", k: ["mean", "average"], a: "The mean (average) is the sum of values divided by how many there are." },
+  { s: "definition", k: ["median"], a: "The median is the middle value of a sorted list." },
+  { s: "definition", k: ["fibonacci"], a: "The Fibonacci sequence starts 0, 1 and each number is the sum of the previous two." },
+  { s: "geometry", k: ["pythagoras", "pythagorean", "hypotenuse"], a: "The Pythagorean theorem: in a right triangle, a squared plus b squared equals c squared." },
+  { s: "geometry", k: ["triangle", "angles"], a: "The interior angles of a triangle always add up to 180 degrees." },
+  { s: "geometry", k: ["circle", "area"], a: "The area of a circle is pi times the radius squared." },
+  { s: "geometry", k: ["rectangle"], a: "The area of a rectangle is its length times its width." },
+  { s: "arithmetic", k: ["percent", "percentage"], a: "A percent is a fraction out of 100; 25 percent means 25 out of 100, or 0.25." },
+  { s: "arithmetic", k: ["square root", "sqrt"], a: "A square root of a number is the value that, multiplied by itself, gives that number." },
+  { s: "arithmetic", k: ["exponent", "power"], a: "An exponent says how many times to multiply a base by itself; 2 to the 3rd is 8." },
+  { s: "concept", k: ["probability"], a: "Probability measures how likely an event is, from 0 (impossible) to 1 (certain)." },
+  { s: "concept", k: ["algebra"], a: "Algebra uses letters as variables to express and solve general relationships between numbers." },
+  { s: "concept", k: ["derivative", "calculus"], a: "In calculus, a derivative measures an instantaneous rate of change; an integral measures accumulated total." },
+];

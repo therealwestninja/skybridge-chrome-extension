@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rook AI</title>
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --line:#30363d; --fg:#e6edf3; --mut:#8b949e; --accent:#2ea043; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px system-ui; background:var(--bg); color:var(--fg); height:100vh; display:flex; flex-direction:column; }
+  header { display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:15px; margin:0 12px 0 0; }
+  .chip { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:3px 8px; color:var(--mut); font-size:11px; }
+  #main { flex:1; display:flex; min-height:0; }
+  #chatwrap { flex:1; display:flex; flex-direction:column; min-width:0; }
+  #log { flex:1; overflow-y:auto; padding:12px; }
+  .u { color:#79c0ff; margin:6px 0; } .a { color:#ffa657; margin:6px 0; } .meta { color:var(--mut); font-size:11px; }
+  #inrow { display:flex; gap:6px; padding:10px; border-top:1px solid var(--line); }
+  #in { flex:1; padding:8px; background:#010409; color:var(--fg); border:1px solid var(--line); border-radius:8px; }
+  button { background:var(--accent); border:0; color:#02110a; padding:8px 12px; border-radius:8px; cursor:pointer; }
+  #panel { width:280px; border-left:1px solid var(--line); background:var(--panel); display:flex; flex-direction:column; }
+  .tabs { display:flex; border-bottom:1px solid var(--line); }
+  .tabs button { flex:1; background:transparent; color:var(--mut); border-radius:0; }
+  .tabs button.on { color:var(--fg); border-bottom:2px solid var(--accent); }
+  .tabpane { padding:10px; overflow-y:auto; display:none; }
+  .tabpane.on { display:block; }
+  textarea, input[type=text] { width:100%; background:#010409; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px; }
+  .mem { border:1px solid var(--line); border-radius:6px; padding:6px; margin:6px 0; font-size:12px; }
+  .row { display:flex; gap:6px; align-items:center; margin:6px 0; }
+  label { font-size:11px; color:var(--mut); }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Rook AI</h1>
+    <span class="chip" id="st-mood">mood -</span>
+    <span class="chip" id="st-action">action -</span>
+    <span class="chip" id="st-src">via -</span>
+  </header>
+  <div id="main">
+    <div id="chatwrap">
+      <div id="log"></div>
+      <div id="inrow"><input id="in" placeholder="say something..." autofocus /><button id="send">Send</button></div>
+    </div>
+    <div id="panel">
+      <div class="tabs">
+        <button data-tab="persona" class="on">Personality</button>
+        <button data-tab="you">You</button>
+        <button data-tab="memory">Memory</button>
+        <button data-tab="selfedit">Self-edits</button>
+        <button data-tab="settings">Settings</button>
+      </div>
+      <div class="tabpane" id="tab-you">
+        <p class="meta">Your profile (a "hero sheet") — Rook reads this for context. Share only what you like.</p>
+        <label>Name</label><input type="text" id="pf-name" />
+        <label style="display:block;margin-top:6px">Pronouns</label><input type="text" id="pf-pronouns" />
+        <label style="display:block;margin-top:6px">About you</label><textarea id="pf-about" rows="3"></textarea>
+        <label style="display:block;margin-top:6px">Interests</label><input type="text" id="pf-interests" />
+        <label style="display:block;margin-top:6px">Goals</label><input type="text" id="pf-goals" />
+        <label style="display:block;margin-top:6px">Preferred style</label><input type="text" id="pf-style" />
+        <button id="saveProfile" style="margin-top:8px">Save profile</button>
+      </div>
+      <div class="tabpane on" id="tab-persona">
+        <label>Description</label>
+        <textarea id="desc" rows="5"></textarea>
+        <label style="display:block;margin-top:8px">Welcome greeting <span class="meta">(shown once to a new user)</span></label>
+        <textarea id="greeting" rows="2" placeholder="e.g. Hey, I'm Rook — good to meet you. What's on your mind?"></textarea>
+        <button id="savePersona" style="margin-top:6px">Save persona</button>
+        <div id="setpoints" style="margin-top:8px"></div>
+      </div>
+      <div class="tabpane" id="tab-memory">
+        <div class="row"><input type="text" id="factText" placeholder="add a fact..." /><button id="addFact">Add</button></div>
+        <div id="memlist"></div>
+        <div class="row"><button id="exportBtn">Export brain</button></div>
+      </div>
+      <div class="tabpane" id="tab-selfedit">
+        <p class="meta">Change proposals from the inner AI (over the agent bus). Nothing is applied automatically — review each and act with an explicit click.</p>
+      </div>
+      <div class="tabpane" id="tab-settings">
+        <div class="row" style="margin-top:8px"><button id="restBtn">Rest (consolidate)</button><button id="resetBtn" class="ghost">Factory reset</button></div>
+        <p class="meta">Rest replays salient memories into the brain (sleep consolidation), fitness-gated so it can't degrade responses. Model + providers are configured in the worker (Settings page).</p>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="brain/app-ext.js"></script>
+</body>
+</html>

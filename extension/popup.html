@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --bg:#0d1117; --panel:#161b22; --line:#262d36; --ink:#c9d1d9; --mut:#8b949e; --accent:#4493f8; --warn:#d29922; --good:#3fb950; --purple:#a371f7; }
+  * { box-sizing:border-box; }
+  body { margin:0; width:360px; background:var(--bg); color:var(--ink); font:13px/1.45 ui-sans-serif,system-ui,Segoe UI,sans-serif; }
+  header { display:flex; align-items:center; gap:8px; padding:11px 13px; border-bottom:1px solid var(--line); }
+  header .glyph { font-size:18px; }
+  header .title { font-weight:700; }
+  header .ver { color:var(--mut); font-size:11px; margin-left:auto; }
+  .open { padding:6px 12px; border:none; border-radius:7px; background:var(--accent); color:#fff; font-weight:600; cursor:pointer; width:100%; margin:10px 13px; width:calc(100% - 26px); }
+  .sec { padding:11px 13px; border-bottom:1px solid var(--line); }
+  .sec h2 { margin:0 0 8px; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--mut); font-weight:700; }
+  .host { font-weight:600; word-break:break-all; }
+  .sub { color:var(--mut); font-size:12px; word-break:break-all; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 2px; }
+  .chip { padding:2px 8px; border-radius:11px; background:var(--panel); border:1px solid var(--line); font-size:11px; }
+  .chip.on { background:rgba(68,147,248,.16); border-color:var(--accent); color:#cfe3ff; }
+  .row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:6px 0; }
+  .row .lbl { font-size:12.5px; }
+  .row .lbl small { display:block; color:var(--mut); font-size:11px; }
+  .sw { position:relative; width:34px; height:19px; flex:0 0 auto; cursor:pointer; }
+  .sw input { display:none; }
+  .sw span { position:absolute; inset:0; background:var(--line); border-radius:19px; transition:.15s; }
+  .sw span::after { content:''; position:absolute; left:2px; top:2px; width:15px; height:15px; border-radius:50%; background:#fff; transition:.15s; }
+  .sw input:checked + span { background:var(--accent); }
+  .sw input:checked + span::after { transform:translateX(15px); }
+  button.mini { padding:4px 9px; border:1px solid var(--line); border-radius:6px; background:var(--panel); color:var(--ink); font-size:11px; cursor:pointer; }
+  .meta { margin-top:8px; padding:8px; background:var(--panel); border:1px solid var(--line); border-radius:7px; font-size:11.5px; white-space:pre-wrap; max-height:140px; overflow:auto; display:none; }
+  .disc { display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px dashed var(--line); }
+  .disc:first-of-type { border-top:none; }
+  .disc .dh { font-weight:600; font-size:12px; }
+  .disc .da { color:var(--mut); font-size:11px; }
+  .empty { color:var(--mut); font-size:12px; font-style:italic; }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--accent); flex:0 0 auto; }
+</style>
+</head>
+<body>
+  <header><span class="glyph">&#9820;</span><span class="title">Rook AI</span><span class="ver" id="ver"></span></header>
+  <button class="open" id="open-panel">&#9707; Open in Side Panel</button>
+  <button class="open" id="open" style="background:var(--panel);color:var(--ink);border:1px solid var(--line);margin-top:6px;">Open in a window</button>
+
+  <div class="sec">
+    <h2>This page</h2>
+    <div class="host" id="host">No page in focus</div>
+    <div class="sub" id="url"></div>
+    <div class="chips" id="chips"></div>
+    <div class="row" id="metarow" style="display:none"><div class="lbl">Page metadata</div><button class="mini" id="readmeta">Read</button></div>
+    <div class="meta" id="meta"></div>
+  </div>
+
+  <div class="sec" id="powersec" style="display:none">
+    <h2>Site powers</h2>
+    <div class="row"><div class="lbl">Trusted site<small>let Rook read &amp; act here</small></div><label class="sw"><input type="checkbox" id="p-trust"><span></span></label></div>
+    <div class="row"><div class="lbl">Index on visit<small>fold page content into the warehouse</small></div><label class="sw"><input type="checkbox" id="p-index"><span></span></label></div>
+    <div class="row"><div class="lbl">Watch live chat<small>stream new chat lines to Rook</small></div><label class="sw"><input type="checkbox" id="p-watch"><span></span></label></div>
+    <div class="row"><div class="lbl">Mute notifications here<small>stop discovery pings for this site</small></div><label class="sw"><input type="checkbox" id="p-mute"><span></span></label></div>
+  </div>
+
+  <div class="sec">
+    <h2>Recently discovered</h2>
+    <div id="discovered"><div class="empty">Nothing yet. Browse a site with search, login, or a live chat.</div></div>
+  </div>
+
+  <div class="sec">
+    <h2>Rook</h2>
+    <div class="row"><div class="lbl">Settings &amp; debug<small id="model-sub">checking&hellip;</small></div><button class="mini" id="debug">Open</button></div>
+    <div class="row"><div class="lbl">Perchance bridge<small>optional web surface</small></div><button class="mini" id="open-perchance">Open</button></div>
+    <div class="row"><div class="lbl">Heart rate<small>live HR over Bluetooth &rarr; Perchance</small></div><button class="mini" id="open-hr">Open</button></div>
+    <div class="row"><div class="lbl">Connect serial device (OSSM)<small id="serial-sub">grant a USB port for the SexCode drive</small></div><button class="mini" id="connect-serial">Connect</button></div>
+  </div>
+
+  <div class="sec">
+    <h2>Notifications</h2>
+    <div class="row"><div class="lbl">Discovery notifications<small>OS toast when a page gains powers</small></div><label class="sw"><input type="checkbox" id="s-notify"><span></span></label></div>
+    <div class="row"><div class="lbl">Badge pulse<small>flash the toolbar icon on discovery</small></div><label class="sw"><input type="checkbox" id="s-pulse"><span></span></label></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+// Atmospheric/emotional phrases (Rook FRESH_SEEDS) to warm-start the n-gram. Expandable.
+export const SEEDS = [
+  { tags: "romance|emotional", phrase: "the half second pause before someone decides to speak" },
+  { tags: "conflict|emotional", phrase: "the silence after a question nobody wants to answer" },
+  { tags: "reflection|emotional", phrase: "the long beat after the door closes" },
+  { tags: "emotional|character", phrase: "the particular quiet of an apology accepted" },
+  { tags: "emotional|atmosphere", phrase: "the relief of walking into a room and finding it empty" },
+  { tags: "discovery|emotional", phrase: "the small thrill of a thing finally clicking into place" },
+  { tags: "atmosphere|place", phrase: "the warmth of a kitchen with something on the stove" },
+  { tags: "reflection|character", phrase: "the honesty that only shows up late at night" },
+  { tags: "dialogue|character", phrase: "the careful way people talk around what they mean" },
+  { tags: "mystery|atmosphere", phrase: "the feeling that the room was just left in a hurry" },
+  { tags: "adventure|atmosphere", phrase: "the open road and a full tank and no particular plan" },
+  { tags: "romance|character", phrase: "the way a name sounds different in a softer voice" },
+  { tags: "conflict|character", phrase: "the steadiness it takes to hold your ground kindly" },
+  { tags: "reflection|emotional", phrase: "the quiet pride of finishing something hard" },
+  { tags: "atmosphere|sensory", phrase: "rain starting just as you get the door closed" },
+  { tags: "emotional|character", phrase: "the comfort of being understood without explaining" },
+  { tags: "discovery|emotional", phrase: "the curiosity that pulls you one more step forward" },
+  { tags: "dialogue|emotional", phrase: "the gentle landing of being told it is alright" },
+];
