@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Rook — Game Controller</title>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--ink:#e6edf3;--muted:#7d8590;--line:rgba(255,255,255,.10);--accent:#4493f8;--green:#3fb950;--red:#f85149;--amber:#d29922;--mono:'JetBrains Mono',ui-monospace,monospace;}
+  *{box-sizing:border-box;margin:0;}
+  body{background:var(--bg);color:var(--ink);font:15px/1.6 system-ui,sans-serif;padding:26px 22px;max-width:560px;margin:0 auto;}
+  h1{font:700 20px var(--mono);letter-spacing:-.5px;margin-bottom:4px;}
+  .lead{color:var(--muted);font-size:13.5px;margin-bottom:20px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;margin:14px 0;}
+  .big{display:flex;align-items:baseline;gap:16px;justify-content:center;padding:8px 0 14px;}
+  .sig{font:800 40px var(--mono);color:var(--green);}
+  .unit{font:600 14px var(--mono);color:var(--muted);}
+  .row{display:flex;gap:18px;align-items:baseline;justify-content:center;margin-top:6px;}
+  .stat{font:600 13px var(--mono);color:var(--muted);}
+  .stat b{color:var(--ink);font-weight:700;}
+  .status{font:12.5px var(--mono);color:var(--muted);margin-top:12px;padding:9px 12px;background:#0d1117;border:1px solid var(--line);border-radius:8px;}
+  .status.ok{color:var(--green);border-color:rgba(63,185,80,.35);}
+  .status.warn{color:var(--amber);}
+  .status.err{color:var(--red);border-color:rgba(248,81,73,.35);}
+  .note{font-size:12.5px;color:var(--muted);margin-top:16px;line-height:1.55;}
+  code{font:12px var(--mono);color:var(--accent);background:#0d1117;border:1px solid var(--line);border-radius:4px;padding:1px 5px;}
+  .map{font:12px var(--mono);color:var(--muted);margin-top:10px;line-height:1.7;}
+</style>
+</head>
+<body>
+  <h1>Rook — Game Controller</h1>
+  <p class="lead">Reads your game pad directly on this PC (top-level, where the Gamepad API works) and forwards each button press to Rook-enabled Perchance generators over the Skybridge <code>gamepad:input</code> bus channel. The embed down-ranks forwarded presses and owns all consent gating; this page just forwards raw edges — and drives your pad's rumble motor from frames the embed has already gated + attenuated.</p>
+
+  <div class="card">
+    <div class="big"><span class="sig" id="signal">—</span><span class="unit">last signal</span></div>
+    <div class="row">
+      <span class="stat">forwarded: <b id="count">0</b></span>
+      <span class="stat">rumble: <b id="rumble">—</b></span>
+    </div>
+    <div class="status" id="status">idle</div>
+    <div class="map">A → green · B → yellow · Y → surpriseme · D-pad ↑/↓ → more/less · LB/RB → less/more · LT/RT → less/more · Start → red · L3+R3 → red</div>
+    <div class="map" style="margin-top:8px"><a href="calibrate.html" style="color:var(--accent);text-decoration:none">⚙ Calibrate &amp; test buttons / sticks / trigger limits →</a></div>
+  </div>
+
+  <p class="note">Keep this tab open while you want the pad live (the Gamepad polling loop runs here). Press a button on the controller to wake it if the browser hasn't registered the pad yet. Inside the Perchance iframe <code>navigator.getGamepads()</code> is blocked, so this top-level page is how the embed sees your controller. Safewords stop the rumble motor here automatically.</p>
+
+  <script src="gamepad-host.js"></script>
+</body>
+</html>

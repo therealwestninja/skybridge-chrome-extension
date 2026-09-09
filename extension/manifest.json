@@ -19,7 +19,7 @@
     },
     {
       "matches": ["*://perchance.org/*", "*://*.perchance.org/*"],
-      "js": ["rook-skybridge-anchor.js"],
+      "js": ["weld-route.js", "rook-skybridge-anchor.js"],
       "run_at": "document_idle",
       "all_frames": false
     }

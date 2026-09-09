@@ -25,6 +25,10 @@ self.__rookImportError = null;
   }
 })();
 
+// NEKO's weld.skybridge anchor on loopback — the far side of the 'rook-weld-forward' relay below.
+// Same wire format as this extension's own anchor (deliberately), so messages pass through untouched.
+var WELD_FWD_URL = 'http://127.0.0.1:48922/weld', WELD_FWD_TIMEOUT_MS = 4000;
+
 // ---- PERCEPTION CORTEX (receive end of the optic nerve) --------------------------------------------------------
 // A wire frame from the phone arrives (as {type:'rook/perceive-frame'}); the LGN converges its packets, the fusion
 // arbiter picks the clearest-led verdict per dimension, and the fused dimensions are handed to the offscreen brain's
@@ -613,6 +617,38 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
   }
   if (msg && msg.type === 'rook-fetch') {
     safeFetch(msg.url, msg.opts).then(sendResponse);   // msg.opts (privileged) is only ever set after anchor consent
+    return true;   // async
+  }
+  // ---- weld.skybridge FORWARDER: relay a skybridge message to NEKO's anchor on loopback. An https
+  //      Perchance page cannot fetch http://127.0.0.1 (mixed content / Private Network Access), and the
+  //      sandboxed generator iframe certainly cannot — but THIS worker can (host_permissions holds
+  //      http://127.0.0.1/*). The wire format is identical on both sides, so we pass the raw message
+  //      through untouched and hand back the parsed reply. Short timeout; NEVER throws — a failure comes
+  //      back as { ok:false, code, reason } which the anchor turns into a structured capability error.
+  //      Consent is enforced UPSTREAM in the anchor (same per-generator gate as every other cap).
+  if (msg && msg.type === 'rook-weld-forward') {
+    (function () {
+      var done = false, ctl = null, timer = null;
+      function respond(r) { if (done) return; done = true; try { clearTimeout(timer); } catch (e) {} try { sendResponse(r); } catch (e) {} }
+      try { ctl = new AbortController(); } catch (e) { ctl = null; }
+      try { timer = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} respond({ ok: false, code: 'timeout', reason: 'NEKO bridge timed out' }); }, WELD_FWD_TIMEOUT_MS); } catch (e) {}
+      try {
+        fetch(WELD_FWD_URL, {
+          method: 'POST', cache: 'no-store', credentials: 'omit',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(msg.message || {}),
+          signal: ctl ? ctl.signal : undefined
+        }).then(function (res) {
+          if (!res.ok) { respond({ ok: false, code: 'unavailable', reason: 'NEKO bridge http ' + res.status }); return null; }
+          return res.json();
+        }).then(function (j) {
+          if (j == null) return;
+          respond({ ok: true, reply: j });
+        }).catch(function (e) {
+          respond({ ok: false, code: 'unavailable', reason: String((e && e.message) || e || 'fetch failed').slice(0, 120) });
+        });
+      } catch (e) { respond({ ok: false, code: 'unavailable', reason: String((e && e.message) || e).slice(0, 120) }); }
+    })();
     return true;   // async
   }
   // GLOBAL MEMORY: the extension OWNS Rook's durable store (vs perchance.org's localStorage). Namespaced 'rookmem:'
@@ -1207,6 +1243,78 @@ chrome.runtime.onMessage.addListener(function (m, sender, sendResponse) {
   }
   if (m.type === 'rook-hr-status') {     // hr.html can report connect/disconnect for UI; just log
     try { wlog('HR sensor ' + String(m.state || '?') + (m.device ? ' (' + m.device + ')' : '')); } catch (e) {}
+    try { sendResponse({ ok: true }); } catch (e) {}
+    return true;
+  }
+});
+
+// ===== GAMEPAD HOST HUB — top-level controller INPUT + RUMBLE bridge (mirrors the SOMA HR HUB) ========================
+// getGamepads() works at the TOP level but is Permissions-Policy-blocked inside the sandboxed Perchance iframe, so the
+// top-level page (gamepad.html / gamepad-host.js) reads the physical pad and pushes each rising-edge press here as
+// { type:'rook-gamepad', id }. We fan it out to every perchance.org anchor tab as { type:'rook-gamepad-in', id }, which
+// the anchor republishes on the weld bus channel 'gamepad:input' → the embed's window.Gamepad.ingestExternal (where a
+// FORWARDED press is down-ranked to the consent matrix; RED / de-escalation stay always-honored). REVERSE path: the
+// embed publishes an already-gated + attenuated rumble frame on the 'gamepad:rumble' bus channel; the anchor forwards it
+// here as { type:'rook-rumble', strong, weak, duration }; we route it to the gamepad host page(s) to drive the pad motor.
+// ALL consent gating, CEIL attenuation and estop live on the EMBED; this worker only FORWARDS raw presses + rumble frames.
+function gamepadBroadcastIn(id) {
+  try {
+    chrome.tabs.query({ url: ['*://perchance.org/*', '*://*.perchance.org/*'] }, function (tabs) {
+      if (chrome.runtime.lastError || !tabs) return;
+      for (var i = 0; i < tabs.length; i++) {
+        try { chrome.tabs.sendMessage(tabs[i].id, { type: 'rook-gamepad-in', id: id }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+      }
+    });
+  } catch (e) {}
+}
+// CONTINUOUS motion (analog axes/triggers), the same top-level→embed route as the discrete presses above. The host
+// forwards a throttled RAW frame { ax:[lx,ly,rx,ry], lt, rt }; we fan it out as { type:'rook-gamepad-motion-in', frame }
+// → anchor republishes on bus 'gamepad:motion' → the embed's window.Gamepad.ingestMotion (which owns the shaping +
+// mapping, identical to the phone module). Raw values only here — no interpretation, no consent surface (motion is a
+// magnitude, not a gate press; whatever eventually consumes `level` gates itself).
+function gamepadBroadcastMotion(frame) {
+  try {
+    chrome.tabs.query({ url: ['*://perchance.org/*', '*://*.perchance.org/*'] }, function (tabs) {
+      if (chrome.runtime.lastError || !tabs) return;
+      for (var i = 0; i < tabs.length; i++) {
+        try { chrome.tabs.sendMessage(tabs[i].id, { type: 'rook-gamepad-motion-in', frame: frame }, function () { void chrome.runtime.lastError; }); } catch (e) {}
+      }
+    });
+  } catch (e) {}
+}
+function gamepadRouteRumble(frame) {
+  try {
+    var urls = [chrome.runtime.getURL('gamepad.html')];   // the flat gamepad host page drives the pad's vibrationActuator
+    chrome.tabs.query({ url: urls }, function (tabs) {
+      if (chrome.runtime.lastError || !tabs) return;
+      for (var i = 0; i < tabs.length; i++) {
+        try { chrome.tabs.sendMessage(tabs[i].id, frame, function () { void chrome.runtime.lastError; }); } catch (e) {}
+      }
+    });
+  } catch (e) {}
+}
+chrome.runtime.onMessage.addListener(function (m, sender, sendResponse) {
+  if (!m) return;
+  if (m.type === 'rook-gamepad') {                 // a rising-edge press from the top-level host page
+    var id = String(m.id || ''); if (id) gamepadBroadcastIn(id);
+    try { sendResponse({ ok: true }); } catch (e) {}
+    return true;
+  }
+  if (m.type === 'rook-gamepad-motion') {          // a throttled raw analog frame from the top-level host page
+    if (m.frame) gamepadBroadcastMotion(m.frame);
+    try { sendResponse({ ok: true }); } catch (e) {}
+    return true;
+  }
+  if (m.type === 'rook-rumble') {                  // an already-gated + attenuated frame from the anchor (bus 'gamepad:rumble')
+    var strong = Number(m.strong); if (!isFinite(strong)) strong = 0;
+    var weak = Number(m.weak); if (!isFinite(weak)) weak = 0;
+    var duration = Number(m.duration); if (!isFinite(duration)) duration = 0;
+    gamepadRouteRumble({ type: 'rook-rumble', strong: strong, weak: weak, duration: duration });
+    try { sendResponse({ ok: true }); } catch (e) {}
+    return true;
+  }
+  if (m.type === 'rook-gamepad-status') {          // host page reports running/stopped for the Debug log
+    try { wlog('gamepad host ' + String(m.state || '?')); } catch (e) {}
     try { sendResponse({ ok: true }); } catch (e) {}
     return true;
   }

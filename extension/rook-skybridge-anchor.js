@@ -60,8 +60,41 @@
   // advertise only what THIS generator can actually use: storage + notify are reserved to
   // the Rook bridge (slug rook-ai), so a third-party generator must not see them in has()
   // (advertising-but-denying makes has('storage') lie). Honest caps per slug.
-  function advCaps() { return (slug() === 'rook-ai') ? CAPS : CAPS.filter(function (c) { return c !== 'storage' && c !== 'notify'; }); }
-  function advDesc() { var o = {}, a = advCaps(), i; for (i = 0; i < a.length; i++) { if (CAPDESC[a[i]]) o[a[i]] = CAPDESC[a[i]]; } return o; }
+  // ---- FORWARDING to NEKO's anchor (http://127.0.0.1:48922/weld) --------------------------------------------
+  // A capability this extension does NOT serve locally (soma-hardware, stroke, phaselock, haptics, gate, …) may
+  // still be live on this machine inside NEKO. The page can't reach loopback (mixed content / PNA) and neither can
+  // the sandboxed iframe — but the BACKGROUND worker can, so we relay through it ('rook-weld-forward').
+  // Honesty rule: a forwarded cap is advertised ONLY while a cached `hello` probe says NEKO is actually up; with
+  // NEKO absent every path below is inert and the anchor behaves exactly as it did before. LOCAL CAPS ALWAYS WIN.
+  var WR = (typeof window.__rookWeldRoute === 'object' && window.__rookWeldRoute) || null;
+  var weldProbe = WR ? WR.makeProbe({ sendBg: function (m) { return sendBg(m, 1); } }) : null;
+  function remoteCaps() { try { return (weldProbe && !isRejected()) ? weldProbe.caps() : []; } catch (e) { return []; } }
+  function localCaps() { return (slug() === 'rook-ai') ? CAPS : CAPS.filter(function (c) { return c !== 'storage' && c !== 'notify'; }); }
+  function advCaps() { var l = localCaps(); return WR ? WR.mergeCaps(l, remoteCaps()) : l; }
+  function advDesc() {
+    var o = {}, a = advCaps(), l = localCaps(), i, c;
+    for (i = 0; i < a.length; i++) {
+      c = a[i];
+      if (CAPDESC[c]) { o[c] = CAPDESC[c]; continue; }
+      if (WR && l.indexOf(c) === -1) o[c] = WR.capDesc(c, weldProbe && weldProbe.agent());   // forwarded: { v:1, forwarded:true, via:'rook-neko' }
+    }
+    return o;
+  }
+  // warm the probe once at load so the FIRST handshake is already honest about NEKO (a miss just yields [] today
+  // and refreshes for the next hello). Failure is silent and cached, so a down NEKO is not re-hammered.
+  // The probe is ASYNC, so the first handshake cannot already know about NEKO: a page that asks once at load
+  // sees only the local caps. That is what `caps-changed` exists for - announce the moment the remote set
+  // actually arrives, so a subscribed page re-reads instead of being told a stale list. We do NOT block the
+  // handshake on the probe: a down NEKO would then delay every hello by the full timeout.
+  try {
+    if (weldProbe) setTimeout(function () {
+      try {
+        Promise.resolve(weldProbe.refresh()).then(function (caps) {
+          if (caps && caps.length) { try { emitEvent('caps-changed', { reason: 'anchor-linked', via: weldProbe.agent(), caps: caps.slice() }); } catch (e) {} }
+        }, function () {});
+      } catch (e) {}
+    }, 0);
+  } catch (e) {}
   function negotiate(theirMax) { var t = (typeof theirMax === 'number') ? theirMax : MAX; return Math.max(MIN, Math.min(MAX, t)); }
   function err(code, reason) { return { ok: false, code: code, reason: reason || code }; }   // structured failure: code is stable + branchable, reason is human text
   // one-way push: subscribers receive `event` messages (e.g. caps-changed). Carries only the anchor's own
@@ -128,6 +161,7 @@
       : cap === 'perceive' ? 'Let "' + gen + '" see through this computer\'s camera and sense your location/presence via Rook?\nOnly coarse derived signals cross — never the video, never your coordinates. You control it per-sensor with the browser\'s own camera/location prompts.'
       : cap === 'socket' ? 'Let "' + gen + '" open a LIVE socket connection through Rook to a local / LAN service?\n(e.g. ws://localhost - a device server like Intiface/Buttplug, or your own Rook server.) The page picks the address; frames pass through Rook unread. Only allow for software you run yourself.'
       : cap === 'serial' ? 'Let "' + gen + '" talk to a device plugged into this computer over USB-Serial through Rook?\n(e.g. an OSSM stroker at 115200 baud.) Rook opens a serial port you already granted (from the Rook popup) and passes bytes through unread. Only allow for hardware you control.'
+      : (CAPS.indexOf(cap) === -1) ? 'Let "' + gen + '" use Rook to reach the "' + cap + '" capability on NEKO running on this computer?\nThe request is relayed to NEKO\'s local bridge (127.0.0.1:48922) — this can drive connected hardware. Only allow for software you run yourself.'
       : 'Let "' + gen + '" use Rook to fetch web pages / APIs on its behalf?\nRook fetches anonymously (no cookies); loopback & private hosts are blocked.');
     var ok = false; try { ok = window.confirm(msg); } catch (e) { ok = true; }
     var until;
@@ -237,7 +271,14 @@
   function busPush(src, origin, channel, message) {
     try { src.postMessage({ channel: SB, type: 'bus', busChannel: channel, message: message }, origin && origin !== 'null' ? origin : '*'); return true; } catch (e) { return false; }
   }
+  // anchor-side (content-script) subscribers — NOT frame subscribers. Lets the anchor itself tap a bus channel the
+  // embed publishes on (e.g. 'gamepad:rumble') and relay it to the worker. Fired for BOTH same-tab publishes and
+  // cross-tab BroadcastChannel arrivals, since both route through busDeliverLocal.
+  var localBusSubs = {};   // channel -> [fn]
+  function busSubscribeLocal(channel, fn) { if (typeof fn !== 'function') return; (localBusSubs[channel] || (localBusSubs[channel] = [])).push(fn); busChannel(); }
+  function busFanoutLocal(channel, message) { var a = localBusSubs[channel]; if (!a) return; for (var i = 0; i < a.length; i++) { try { a[i](message); } catch (e) {} } }
   function busDeliverLocal(channel, message, skipSrc) {
+    busFanoutLocal(channel, message);                 // anchor-local taps first (run even with no frame subscribers)
     var arr = busSubs[channel]; if (!arr) return;
     var live = [];   // prune subscribers whose frame is gone (postMessage throws) so dead iframes don't accumulate
     for (var i = 0; i < arr.length; i++) {
@@ -381,7 +422,15 @@
       if (cap === 'unsubscribe') { delSub(src); reply(src, ev.origin, nonce, { ok: true }); return; }
       if (cap === 'rate') { serviceRate(d.payload || {}).then(function (r) { reply(src, ev.origin, nonce, r); }); return; }   // rating rides the already-consented ai flow - no extra prompt, harmless (a score back to the mouth)
       if (!hydrated) { reply(src, ev.origin, nonce, err('initializing', 'initializing - try again')); return; }   // never service a privileged request before the block lists load
-      if (CAPS.indexOf(cap) === -1) { reply(src, ev.origin, nonce, err('unsupported', 'unsupported capability: ' + (cap || '(none)'))); return; }
+      // route: served here? served by NEKO on loopback? neither? (CAPS = the full local set — a remote peer can
+      // never shadow a local capability, and slug-reserved locals still fall through to their own 'reserved' check)
+      var route = WR ? WR.routeCap(cap, CAPS, remoteCaps()) : (CAPS.indexOf(cap) === -1 ? 'unsupported' : 'local');
+      if (route === 'unsupported') { reply(src, ev.origin, nonce, err('unsupported', 'unsupported capability: ' + (cap || '(none)'))); return; }
+      if (route === 'forward') {   // NEKO hardware cap — SAME per-generator consent gate as every local cap
+        WR.forwardCap({ sendBg: sendBg, allowCap: allowCap, gen: slug() }, cap, d.payload || {})
+          .then(function (r) { reply(src, ev.origin, nonce, r); }, function () { reply(src, ev.origin, nonce, err('unavailable', 'NEKO bridge unreachable')); });
+        return;
+      }
       if (cap === 'ai') {
         allowCap(slug(), 'ai').then(function (ok) {
           if (!ok) { reply(src, ev.origin, nonce, err('denied', 'denied by the user')); return; }
@@ -512,6 +561,56 @@
   } catch (e) {}
   // on load, ask the worker for the last known reading so a page that connects mid-session isn't empty.
   try { chrome.runtime.sendMessage({ type: 'rook-soma-latest' }, function (r) { void chrome.runtime.lastError; if (r && r.ok && r.ch) somaIngest(r.ch); }); } catch (e) {}
+
+  // ---- the `gamepad` bridge: top-level controller INPUT + RUMBLE, mirroring the soma path. The Gamepad API is
+  //      Permissions-Policy-blocked inside the sandboxed Perchance iframe, so the extension's top-level gamepad page
+  //      reads the pad and forwards each rising-edge press to the worker, which fans it here as { type:'rook-gamepad-in',
+  //      id }. We PUBLISH { id } on bus channel 'gamepad:input' — the embed's SB.bus.subscribe('gamepad:input') routes it
+  //      into window.Gamepad.ingestExternal (a FORWARDED press is down-ranked to the consent matrix there; the anchor
+  //      merely relays the raw edge). REVERSE: the embed publishes an already-gated + attenuated rumble frame on bus
+  //      channel 'gamepad:rumble'; we tap it (anchor-local sub) and forward { strong, weak, duration } up to the worker,
+  //      which routes it to the host page to drive the pad motor. NO gating here — all consent/clamp/estop is on the embed. ----
+  var GAMEPAD_IN_CHANNEL = 'gamepad:input';
+  var GAMEPAD_MOTION_CHANNEL = 'gamepad:motion';
+  var GAMEPAD_RUMBLE_CHANNEL = 'gamepad:rumble';
+  // worker pushes { type:'rook-gamepad-in', id } whenever the top-level host page forwards a rising-edge press.
+  try {
+    chrome.runtime.onMessage.addListener(function (m, sender, sendResp) {
+      if (!m || m.type !== 'rook-gamepad-in') return;
+      try {
+        var id = String(m.id || '');
+        if (id) busPublishBoth(GAMEPAD_IN_CHANNEL, { id: id });   // same-tab frames + other tabs; embed ingestExternal receives {id}
+        if (sendResp) sendResp({ ok: true });
+      } catch (e) { try { if (sendResp) sendResp({ ok: false }); } catch (e2) {} }
+      return true;
+    });
+  } catch (e) {}
+  // worker pushes { type:'rook-gamepad-motion-in', frame } — a throttled raw analog frame. Publish it on 'gamepad:motion';
+  // the embed's SB.bus.subscribe('gamepad:motion') routes it into window.Gamepad.ingestMotion (which shapes + maps it,
+  // identical to the phone module). Motion is a magnitude, not a gate press — no down-rank here, just relay.
+  try {
+    chrome.runtime.onMessage.addListener(function (m, sender, sendResp) {
+      if (!m || m.type !== 'rook-gamepad-motion-in') return;
+      try {
+        if (m.frame) busPublishBoth(GAMEPAD_MOTION_CHANNEL, m.frame);
+        if (sendResp) sendResp({ ok: true });
+      } catch (e) { try { if (sendResp) sendResp({ ok: false }); } catch (e2) {} }
+      return true;
+    });
+  } catch (e) {}
+  // tap the embed's rumble publishes on 'gamepad:rumble' and relay each frame to the worker → host pad motor. The frame
+  // is ALREADY consent-gated + CEIL-attenuated by 187-rookActuationGamepad; a safeword publishes a zero/stop frame here
+  // too, so the host motor halts. We only forward — never gate, never scale.
+  try {
+    busSubscribeLocal(GAMEPAD_RUMBLE_CHANNEL, function (message) {
+      try {
+        var f = message || {};
+        var strong = Number(f.strong), weak = Number(f.weak), duration = Number(f.duration);
+        if (!isFinite(strong)) strong = 0; if (!isFinite(weak)) weak = 0; if (!isFinite(duration)) duration = 0;
+        sendBg({ type: 'rook-rumble', strong: strong, weak: weak, duration: duration });
+      } catch (e) {}
+    });
+  } catch (e) {}
 
   // ---- the `perceive` service: opt-in vision/device/geo pushed from the extension's capture doc via the worker.
   //      Mirrors the phone anchor's perception: a generator PULLS the latest per-organ snapshot (`op:'latest'`) and/or

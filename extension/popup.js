@@ -67,6 +67,7 @@
   // optional Perchance bridge (the web surface) — the local console is the default ("Open Rook" button)
   $('open-perchance').addEventListener('click', function () { send({ type: 'rook-popup-open', target: 'perchance' }).then(function () { window.close(); }); });
   { var hr = $('open-hr'); if (hr) hr.addEventListener('click', function () { try { chrome.tabs.create({ url: chrome.runtime.getURL('hr.html') }); } catch (e) { try { window.open(chrome.runtime.getURL('hr.html')); } catch (e2) {} } window.close(); }); }
+  { var gp = $('open-gamepad'); if (gp) gp.addEventListener('click', function () { try { chrome.tabs.create({ url: chrome.runtime.getURL('gamepad.html') }); } catch (e) { try { window.open(chrome.runtime.getURL('gamepad.html')); } catch (e2) {} } window.close(); }); }
   send({ type: 'rook-model-config' }).then(function (r) {
     var sub = $('model-sub'); if (!sub) return;
     var s = r && r.snapshot; if (!s) { sub.textContent = 'unavailable'; return; }

@@ -1,0 +1,107 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Rook — Controller Calibration</title>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--ink:#e6edf3;--muted:#7d8590;--line:rgba(255,255,255,.10);--accent:#4493f8;--green:#3fb950;--red:#f85149;--amber:#d29922;--mono:'JetBrains Mono',ui-monospace,monospace;}
+  *{box-sizing:border-box;margin:0;}
+  body{background:var(--bg);color:var(--ink);font:15px/1.6 system-ui,sans-serif;padding:26px 22px;max-width:640px;margin:0 auto;}
+  h1{font:700 20px var(--mono);letter-spacing:-.5px;margin-bottom:4px;}
+  h2{font:700 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 12px;}
+  .lead{color:var(--muted);font-size:13.5px;margin-bottom:18px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin:14px 0;}
+  .status{font:12.5px var(--mono);color:var(--muted);padding:9px 12px;background:#0d1117;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;}
+  .status.ok{color:var(--green);border-color:rgba(63,185,80,.35);}
+  .status.warn{color:var(--amber);border-color:rgba(210,153,34,.35);}
+  .status.err{color:var(--red);border-color:rgba(248,81,73,.35);}
+  /* buttons grid */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px;}
+  .btn{background:#0d1117;border:1px solid var(--line);border-radius:8px;padding:8px 6px;text-align:center;transition:background .06s,border-color .06s;position:relative;}
+  .btn.mapped{border-color:rgba(68,147,248,.30);}
+  .btn.on{background:#1f6feb22;border-color:var(--accent);}
+  .btn .bi{position:absolute;top:3px;left:5px;font:9px var(--mono);color:var(--muted);}
+  .btn .bn{display:block;font:700 14px var(--mono);margin-top:4px;}
+  .btn .bs{display:block;font:10px var(--mono);margin-top:3px;}
+  .btn .bs.off{color:#30363d;}
+  .btn .bv{display:block;font:9px var(--mono);color:var(--amber);}
+  /* sticks */
+  .sticks{display:flex;gap:22px;justify-content:center;}
+  .stick{text-align:center;}
+  .pad{position:relative;width:120px;height:120px;border:1px solid var(--line);border-radius:10px;background:#0d1117;margin:0 auto;}
+  .pad .dz{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border:1px dashed rgba(125,133,144,.5);border-radius:50%;}
+  .pad .dot{position:absolute;width:12px;height:12px;border-radius:50%;background:var(--muted);transform:translate(-50%,-50%);transition:left .03s,top .03s;}
+  .pad .dot.live{background:var(--green);box-shadow:0 0 10px var(--green);}
+  .sl{font:11px var(--mono);color:var(--muted);margin-top:8px;}
+  .sxy{color:var(--ink);}
+  /* triggers */
+  .trigrow{display:flex;align-items:center;gap:12px;margin:10px 0;}
+  .tl{font:12px var(--mono);color:var(--muted);min-width:88px;}
+  .bar{flex:1;position:relative;height:16px;background:#0d1117;border:1px solid var(--line);border-radius:8px;overflow:visible;}
+  .bar .fill{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#1f6feb,#3fb950);border-radius:8px 0 0 8px;transition:width .03s;}
+  .bar .tick{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--accent);}
+  .bar .tick.exit{background:var(--amber);}
+  .tv{font:11px var(--mono);color:var(--muted);min-width:74px;text-align:right;}
+  .tv.armed{color:var(--green);font-weight:700;}
+  /* calibration sliders */
+  .slider{display:flex;align-items:center;gap:12px;margin:12px 0;}
+  .slider label{font:12px var(--mono);color:var(--muted);min-width:150px;}
+  .slider input[type=range]{flex:1;accent-color:var(--accent);}
+  .slider .v{font:12px var(--mono);color:var(--ink);min-width:44px;text-align:right;}
+  .actions{display:flex;gap:10px;align-items:center;margin-top:14px;}
+  button.act{font:600 13px var(--mono);padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:#0d1117;color:var(--ink);cursor:pointer;}
+  button.act.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+  button.act:hover{border-color:var(--muted);}
+  .savemsg{font:12px var(--mono);color:var(--green);opacity:0;transition:opacity .3s;}
+  /* test log */
+  .log{font:12px var(--mono);min-height:120px;background:#0d1117;border:1px solid var(--line);border-radius:8px;padding:12px;}
+  .logline{padding:1px 0;}
+  .note{font-size:12.5px;color:var(--muted);margin-top:16px;line-height:1.55;}
+  a{color:var(--accent);text-decoration:none;} a:hover{text-decoration:underline;}
+</style>
+</head>
+<body>
+  <h1>Rook — Controller Calibration</h1>
+  <p class="lead">Test every button, stick, and trigger, verify the Rook signal each mapped control fires, and set the analog-trigger limits + stick deadzone. Saved limits are read by the forwarder (<code style="font:11px var(--mono);color:var(--accent)">gamepad-host.js</code>). This page forwards nothing — it's purely setup &amp; verify. <a href="gamepad.html">← back to the forwarder</a></p>
+
+  <div class="status" id="status">detecting controller…</div>
+
+  <div id="body-panels">
+    <div class="card">
+      <h2>Buttons <span style="color:#30363d;font-weight:400">(mapped controls show their signal)</span></h2>
+      <div class="grid" id="buttons"></div>
+    </div>
+
+    <div class="card">
+      <h2>Thumbsticks <span style="color:#30363d;font-weight:400">(dashed ring = deadzone)</span></h2>
+      <div class="sticks" id="sticks"></div>
+    </div>
+
+    <div class="card">
+      <h2>Shoulder triggers <span style="color:#30363d;font-weight:400">(blue tick = fire / amber = release)</span></h2>
+      <div id="triggers"></div>
+    </div>
+
+    <div class="card">
+      <h2>Calibration</h2>
+      <div class="slider"><label>Trigger FIRE threshold</label><input type="range" id="enter" min="0.1" max="0.95" step="0.01"><span class="v" id="enterv">0.60</span></div>
+      <div class="slider"><label>Trigger RELEASE threshold</label><input type="range" id="exit" min="0.05" max="0.9" step="0.01"><span class="v" id="exitv">0.40</span></div>
+      <div class="slider"><label>Stick deadzone</label><input type="range" id="deadzone" min="0" max="0.5" step="0.01"><span class="v" id="deadzonev">0.15</span></div>
+      <div class="actions">
+        <button class="act primary" id="save">Save</button>
+        <button class="act" id="reset">Reset</button>
+        <span class="savemsg" id="savemsg"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Test log <span style="color:#30363d;font-weight:400">(press a mapped control)</span></h2>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+  <p class="note">The FIRE/RELEASE gap is hysteresis — a trigger fires its signal once when it crosses FIRE and won't re-fire until it drops below RELEASE, so a resting-heavy trigger can't chatter. A wider gap = steadier; a narrower gap = more responsive. The deadzone ignores small stick drift near center.</p>
+
+  <script src="calibrate.js"></script>
+</body>
+</html>
