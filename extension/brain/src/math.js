@@ -4,6 +4,8 @@ export const clamp = (x, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, x));
 export const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
 // Safe number coercion: return x if it's a finite number, else the default.
 export const num = (x, d = 0) => (typeof x === "number" && isFinite(x) ? x : d);
+// L2 (Euclidean) norm of a scalar or array — the "activity" magnitude of a percept slice. Accepts a bare number.
+export const l2 = (a) => Math.hypot(...(Array.isArray(a) ? a : [a]));
 
 // --- the brain's regulatory primitives (named so the affect/homeostatic layer is self-documenting) ---
 // Exponential moving average: pull `old` a fraction `alpha` of the way toward `target`.

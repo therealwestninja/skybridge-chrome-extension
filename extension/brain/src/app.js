@@ -1180,27 +1180,6 @@ export function makeApp(config = {}) {
     // ROAMers: one self, many bodies. Returns a hub that arbitrates the self's attention across a fleet of pluggable
     // bodies (piloting the salient one, autopiloting the rest). See roamers.js.
     roamerHub: (opts) => makeRoamerHub(app, { onFault: noteFault, ...opts }),
-
-    // PERCEPTION INGRESS: fused body-senses from the phone (retina → optic nerve → LGN → fusion, delivered by the SW
-    // bridge). The senses COMPETE in attention by their fused confidence — the operator's clearest-leads policy — so a
-    // clear, corroborated body-sense can win the workspace, a lone noisy blip cannot. The winning focus + per-source
-    // weights are recorded (app.senses()) for the reply / proactivity paths to read. See rook-sensory-nerve-lgn.
-    perceive: (dims) => {
-      try {
-        const list = Array.isArray(dims) ? dims : (dims == null ? [] : [dims]);
-        const cands = list.filter((d) => d && d.active).map((d) => ({
-          source: "sense:" + d.dimension,
-          text: d.dimension + " (" + (d.lead || "?") + (d.reinforcedBy && d.reinforcedBy.length ? "+" + d.reinforcedBy.join("+") : "") + ")",
-          salience: Number(d.confidence) || 0,
-          tags: ["sense", d.dimension],
-        }));
-        if (!cands.length) { app._senseState = { at: now(), focus: null, weights: {}, dims: [] }; return { admitted: 0, focus: null }; }
-        const g = attention.gate(cands);
-        app._senseState = { at: now(), focus: g.focus, weights: g.weights, dims: list };
-        return { admitted: g.admitted ? g.admitted.length : 0, focus: g.focus, weights: g.weights };
-      } catch (e) { return { admitted: 0, error: String((e && e.message) || e).slice(0, 200) }; }
-    },
-    senses: () => (app._senseState || { at: 0, focus: null, weights: {}, dims: [] }),
     save: persist,
 
     _internals: () => ({ organism, reflex, store, session, mind, executive, volition, procedural, temporal, regulation, imagination, council, cerebellum, theoryOfMind, attention, drives, proactivity, hierarchy, innerVoice, respoolSelf, express, growth, relationship, psyche, primal, viscera, endocrine, beliefs, vitals, eventSegment, world, director, guard, governor, kinship, verifier, configAudit, ruleEvolver, calibratedAffect, socraticCritic, engagement, voc, skills, trust, compromiseScan, mutualAttestation, beaconSilence, contextGuard, echoChamberGuard, cascadeFault, sanitizer, resilience }),

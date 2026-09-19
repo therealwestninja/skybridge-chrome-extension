@@ -10,6 +10,8 @@
 // object like { goto:{x,z}, agl, mode } (drone) or { drive:{throttle,steer} } / { goto:{x,y} } (car); toCommand() maps it
 // to the transport's command strings. Everything degrades safely: an unreachable body reports a FAULT salience, not a throw.
 
+import { makeFlyNav } from "./flyNav.js";
+
 const num = (x, d = 0) => (typeof x === "number" && isFinite(x) ? x : d);
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const parseD = (status) => { const m = /(?:^|\s)d=([\d.]+)/.exec(status || ""); return m ? parseFloat(m[1]) : 0; };
@@ -195,6 +197,88 @@ export function makeVehicleRoamer({ id = "vehicle", kind = "drone", transport, s
     autopilot: autopilot || (async () => ({ id, held: true })),
     state: () => lastState,
   };
+}
+
+// ================= FlyNav autopilot binding (Task 4) =================
+// Wire the finished `flyNav` navigator ([[flyNav.js]]) in as the `autopilot` seam of a vehicleRoamer body. The plan's
+// composition table names this the concrete embodiment: flyNav ADVISES motor intents each tick, motorGate (inside
+// flyNav) DECIDES (turns anything unsafe into a full STOP), and the roamer's act()/transport.send carries the GATED
+// command to the body. Sim-first: the default transport is the Liftoff harness (:8788) but nothing is sent until the
+// harness loop actively calls act() — and the demo keeps that behind an on-screen ARM toggle (supervisor-arm discipline).
+
+const LEVEL_POSE = { quat: { x: 0, y: 0, z: 0, w: 1 }, angVel: { x: 0, y: 0, z: 0 } };
+const wrapRad = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+
+// defaultDroneTelemetry — the small, caller-overridable adapter from a Liftoff /state drone shape into flyNav's step
+// telemetry. Mapping (drone read → flyNav telemetry):
+//   obs.agl               → agl            (height above ground, m; feeds looming/GPWS)
+//   obs.vsFpm             → vsFpm          (vertical speed, ft/min; sinking = looming)
+//   obs.closingRate       → closingRate    (direct closing speed if the body reports it; else derived from vsFpm)
+//   obs.flowLeft/Right    → flowLeft/Right (optic-flow magnitudes if present; else 0 = clear corridor)
+//   target + obs.pos/heading → bearing     (signed goal-heading error, rad; + = target to the RIGHT) — or st.bearing
+//   obs.pose (pose6)      → pose           (attitude; defaults to a LEVEL pose when absent)
+//   pos / reflexTrigger / heartbeatNow / live / reward passed straight through to the gate/cerebellum when present.
+export function defaultDroneTelemetry(st) {
+  if (!st || typeof st !== "object") return { bearing: 0, flowLeft: 0, flowRight: 0, agl: 50, vsFpm: 0, closingRate: 0, pose: LEVEL_POSE };
+  const o = st.obs || {};
+  let bearing = num(st.bearing, 0);
+  if (st.target && o.pos) {
+    const dx = num(st.target.x) - num(o.pos.x);
+    const dz = num(st.target.z) - num(o.pos.z);
+    const desired = Math.atan2(dx, dz);           // heading toward target (about +Y, ground-plane convention)
+    bearing = wrapRad(desired - num(o.heading, 0));
+  }
+  const tel = {
+    bearing,
+    flowLeft: num(o.flowLeft, 0),
+    flowRight: num(o.flowRight, 0),
+    agl: num(o.agl, 50),
+    vsFpm: num(o.vsFpm, 0),
+    closingRate: o.closingRate != null ? num(o.closingRate) : undefined,
+    pose: o.pose || st.pose || LEVEL_POSE,
+  };
+  if (st.pos || o.pos) tel.pos = st.pos || o.pos;   // world position for the geofence/chaperone
+  if (st.reflexTrigger != null) tel.reflexTrigger = st.reflexTrigger;
+  if (st.heartbeatNow != null) tel.heartbeatNow = st.heartbeatNow;
+  if (st.live) tel.live = st.live;
+  if (st.reward != null) tel.reward = st.reward;
+  return tel;
+}
+
+// flyNavCommands — map a flyNav GATED result ({command:{tool,args,velocity},allow,...}) into transport command strings.
+// flyNav is a RATE controller (steer/throttle/climb), so it drives the body with a `fly?…` rate command; a gated STOP
+// (tool==="stop") becomes a plain `stop`. This is a deliberate seam choice: the stock droneCommands interface is
+// positional (goto/climb/mode) and would DISCARD flyNav's per-tick steer/throttle, so flyNavRoamer supplies its own
+// rate-faithful mapper rather than force the navigator through a positional one (documented as the design deviation).
+export function flyNavCommands(gated) {
+  if (!gated || !gated.command || typeof gated.command !== "object") return [];
+  const c = gated.command;
+  if (c.tool === "stop") return ["stop"];
+  const a = c.args || {};
+  return [`fly?steer=${num(a.steer)}&throttle=${num(a.throttle)}&climb=${num(a.climb)}`];
+}
+
+// flyNavRoamer — a vehicleRoamer whose autopilot IS a flyNav navigator. Additive convenience; makeVehicleRoamer is
+// untouched and composed. The autopilot: reads the latest vehicle state (roamer.state() or a fresh transport.read),
+// adapts it via toTelemetry(state) into flyNav telemetry, calls nav.step(telemetry, dt), and RETURNS the gated result
+// so the roamer act() sends the gated command (or STOP). dt is passed in by the harness loop (accumulate there) — never
+// a clock inside, preserving flyNav's determinism/purity.
+export function flyNavRoamer({
+  id = "flynav", kind = "drone", base = null, transport = null, fetchImpl = null,
+  nav = null, toTelemetry = defaultDroneTelemetry, onFault = null,
+} = {}) {
+  const t = transport || httpTransport(base || "http://127.0.0.1:8788", { fetchImpl });
+  const navigator = nav || makeFlyNav();
+  let roamer;
+  const autopilot = async (_percept, dt = 0) => {
+    let st = roamer && roamer.state ? roamer.state() : null;
+    if (st == null) { try { st = await t.read(); } catch (e) { if (onFault) onFault(`flyNavRoamer.${id}.autopilot`, e); st = null; } }
+    const telemetry = toTelemetry(st);
+    const gated = navigator.step(telemetry, num(dt));
+    return { id, telemetry, ...gated };   // { command, allow, decision, debug, telemetry, id }
+  };
+  roamer = makeVehicleRoamer({ id, kind, transport: t, toCommand: flyNavCommands, autopilot, onFault });
+  return Object.assign(roamer, { nav: navigator, transport: t });
 }
 
 // Convenience constructors for the two scaffolded bodies.
